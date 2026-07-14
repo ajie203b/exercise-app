@@ -17,7 +17,10 @@
 - **徒手** (body weight) - 325 个练习
 - **健腹轮** (roller/wheel roller) - 10 个练习
 - **跳绳** (rope) - 10 个练习
-## 页面介绍
+## 软件图标
+<img width="252" height="238" alt="image" src="https://github.com/user-attachments/assets/b5094649-e505-427f-ba8e-6bfd974b3d37" />
+
+## 页面图
 <img width="641" height="1350" alt="image" src="https://github.com/user-attachments/assets/10bf3538-774a-4340-9412-66f19614ca54" />
 
 
