@@ -1,6 +1,7 @@
 package com.exercise.app
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -33,6 +34,10 @@ fun ExerciseApp(
 
     val context = LocalContext.current
 
+
+    BackHandler(enabled = selectedExercise != null) {
+        selectedExercise = null
+    }
     // 设置更新回调
     LaunchedEffect(updateManager) {
         updateManager?.onUpdateChecked = { info ->
