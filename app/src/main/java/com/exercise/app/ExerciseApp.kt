@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,30 +30,45 @@ fun ExerciseApp(
     var showUpdateDialog by remember { mutableStateOf(false) }
     var showCheckingDialog by remember { mutableStateOf(false) }
     var showDownloadDialog by remember { mutableStateOf(false) }
+    var showDownloadCompleteDialog by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableStateOf(0f) }
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+    var downloadedFile by remember { mutableStateOf<File?>(null) }
 
     val context = LocalContext.current
-
 
     BackHandler(enabled = selectedExercise != null) {
         selectedExercise = null
     }
+
     // 设置更新回调
     LaunchedEffect(updateManager) {
         updateManager?.onUpdateChecked = { info ->
             showCheckingDialog = false
             if (info != null) {
+                // 有新版本：显示更新信息对话框
                 updateInfo = info
                 showUpdateDialog = true
             } else {
+                // 没有新版本：显示提示（不返回主页面）
                 Toast.makeText(context, "当前已是最新版本", Toast.LENGTH_SHORT).show()
             }
+        }
+
+        updateManager?.onDownloadProgress = { progress ->
+            downloadProgress = progress
+        }
+
+        updateManager?.onDownloadComplete = { file ->
+            showDownloadDialog = false
+            downloadedFile = file
+            showDownloadCompleteDialog = true
         }
 
         updateManager?.onError = { error ->
             showCheckingDialog = false
             showDownloadDialog = false
+            showUpdateDialog = false
             Toast.makeText(context, error, Toast.LENGTH_LONG).show()
         }
     }
@@ -79,8 +95,10 @@ fun ExerciseApp(
             description = updateInfo!!.description,
             apkSize = updateInfo!!.apkSize,
             onConfirm = {
+                // 点击"立即更新"后自动开始下载
                 showUpdateDialog = false
                 showDownloadDialog = true
+                downloadProgress = 0f
                 updateManager?.startDownload(updateInfo!!)
             },
             onDismiss = {
@@ -96,6 +114,18 @@ fun ExerciseApp(
             onDismiss = {
                 showDownloadDialog = false
                 updateManager?.cancelDownload()
+            }
+        )
+    }
+
+    if (showDownloadCompleteDialog && downloadedFile != null) {
+        DownloadCompleteDialog(
+            onInstall = {
+                showDownloadCompleteDialog = false
+                updateManager?.installApk(downloadedFile!!)
+            },
+            onDismiss = {
+                showDownloadCompleteDialog = false
             }
         )
     }

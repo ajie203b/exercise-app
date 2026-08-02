@@ -60,9 +60,6 @@ dependencies {
     implementation("io.coil-kt:coil-gif:2.5.0")
     implementation("com.google.code.gson:gson:2.10.1")
 
-    // 自动更新库
-    implementation("io.github.azhon:appupdate:4.2.6")
-
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
