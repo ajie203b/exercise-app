@@ -19,3 +19,13 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renameSourcefileattribute SourceFile
+
+# Gson 反射解析的数据模型：保留类与字段名（含 @SerializedName）
+-keep class com.exercise.app.Exercise { *; }
+-keep class com.exercise.app.ExerciseCategory { *; }
+-keep class com.exercise.app.UpdateInfo { *; }
+-keepclassmembers,allowobfuscation class * {
+    @com.google.gson.annotations.SerializedName <fields>;
+}
+-keepattributes Signature
+-keepattributes *Annotation*
