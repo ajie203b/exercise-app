@@ -22,4 +22,3 @@ dependencyResolutionManagement {
 
 rootProject.name = "ExerciseApp"
 include(":app")
-include(":app")

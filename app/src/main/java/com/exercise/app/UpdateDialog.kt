@@ -10,7 +10,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * 更新对话框
+ * 发现新版本对话框
  */
 @Composable
 fun UpdateDialog(
@@ -79,7 +79,7 @@ fun DownloadProgressDialog(
     onDismiss: () -> Unit
 ) {
     AlertDialog(
-        onDismissRequest = { /* 禁止关闭 */ },
+        onDismissRequest = { /* 下载中禁止点击外部关闭 */ },
         title = {
             Text(
                 text = "正在下载更新...",
@@ -88,15 +88,6 @@ fun DownloadProgressDialog(
         },
         text = {
             Column {
-                LinearProgressIndicator(
-                    progress = progress,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(8.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                )
-                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = "${(progress * 100).toInt()}%",
                     fontSize = 14.sp,
@@ -106,7 +97,48 @@ fun DownloadProgressDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("取消")
+                Text("取消下载")
+            }
+        }
+    )
+}
+
+/**
+ * 下载完成对话框 - 提示用户安装
+ */
+@Composable
+fun DownloadCompleteDialog(
+    onInstall: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "下载完成",
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Text(
+                text = "更新包已下载完成，点击下方按钮进行安装。",
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onInstall,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Text("立即安装")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("稍后安装")
             }
         }
     )
@@ -131,9 +163,10 @@ fun CheckingUpdateDialog() {
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    strokeWidth = 2.dp
+                Text(
+                    text = "请稍候",
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         },
