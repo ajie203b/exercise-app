@@ -1,6 +1,6 @@
 {
-  "versionCode": 2,
-  "versionName": "1.0.1",
-  "description": "1. 健身训练应用首发版本\n2. 支持345个健身练习\n3. 支持分类筛选和搜索\n4. 支持自动更新",
-  "apkSize": "5.0MB"
+  "versionCode": 3,
+  "versionName": "1.1.0",
+  "description": "1. 新增收藏夹、训练辅助(倒计时/秒表/计数)、今日训练与随机动作\n2. 列表与启动性能优化，滚动更流畅\n3. 深色模式与界面细节打磨\n4. 安装包体积优化",
+  "apkSize": "31.4MB"
 }
