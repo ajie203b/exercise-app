@@ -12,16 +12,9 @@ import com.exercise.app.ui.theme.ExerciseAppTheme
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var updateManager: UpdateManager
-
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-
-        CoilConfig.init(applicationContext)
-
-        updateManager = UpdateManager(this)
-        updateManager.init()
 
         setContent {
             ExerciseAppTheme {
@@ -29,16 +22,9 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    ExerciseApp(updateManager = updateManager)
+                    ExerciseApp()
                 }
             }
-        }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        if (::updateManager.isInitialized) {
-            updateManager.destroy()
         }
     }
 }

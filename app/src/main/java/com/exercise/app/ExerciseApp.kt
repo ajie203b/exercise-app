@@ -2,301 +2,134 @@ package com.exercise.app
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Casino
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FitnessCenter
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.SearchOff
-import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import java.io.File
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * 应用外层壳：只负责导航（列表 / 详情）、今日训练弹层与更新流程。
+ * 具体列表渲染下沉到 [ExerciseListScreen]，更新交互下沉到 [UpdateDialogHost]。
+ */
 @Composable
 fun ExerciseApp(
-    updateManager: UpdateManager? = null,
-    viewModel: ExerciseViewModel = viewModel()
+    viewModel: ExerciseViewModel = viewModel(),
+    updateViewModel: UpdateViewModel = viewModel()
 ) {
-    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
-    val filteredExercises by viewModel.filteredExercises.collectAsStateWithLifecycle()
-    val favorites by viewModel.favorites.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val allExercises by viewModel.allExercises.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
-    val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
-    val showFavoritesOnly by viewModel.showFavoritesOnly.collectAsStateWithLifecycle()
     val todayWorkout by viewModel.todayWorkout.collectAsStateWithLifecycle()
-
-    var selectedExercise by remember { mutableStateOf<Exercise?>(null) }
-
-    var showUpdateDialog by remember { mutableStateOf(false) }
-    var showCheckingDialog by remember { mutableStateOf(false) }
-    var showDownloadDialog by remember { mutableStateOf(false) }
-    var showDownloadCompleteDialog by remember { mutableStateOf(false) }
-    var downloadProgress by remember { mutableStateOf(0f) }
-    var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
-    var downloadedFile by remember { mutableStateOf<File?>(null) }
+    val updateState by updateViewModel.state.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
 
-    BackHandler(enabled = selectedExercise != null) { selectedExercise = null }
+    // 列表滚动位置提到这一层：进入详情再返回时不会跳回顶部
+    val listState = rememberLazyListState()
 
-    LaunchedEffect(updateManager) {
-        updateManager?.onUpdateChecked = { info ->
-            showCheckingDialog = false
-            if (info != null) {
-                updateInfo = info
-                showUpdateDialog = true
+    // 只保存 id：旋转屏幕或进程回收后可还原，也避免持有整份数据的快照
+    var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedExercise = remember(allExercises, selectedId) {
+        selectedId?.let { id -> allExercises.firstOrNull { it.id == id } }
+    }
+
+    // 数据加载完成后若仍找不到目标（例如数据版本变化），清空选中避免停在空白页
+    LaunchedEffect(selectedId, allExercises, uiState.isLoading) {
+        val id = selectedId ?: return@LaunchedEffect
+        if (!uiState.isLoading && allExercises.isNotEmpty() && allExercises.none { it.id == id }) {
+            selectedId = null
+        }
+    }
+
+    LaunchedEffect(updateViewModel) {
+        updateViewModel.events.collect { event ->
+            when (event) {
+                is UpdateEvent.Message ->
+                    Toast.makeText(context, event.text, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    BackHandler(enabled = selectedExercise != null) { selectedId = null }
+
+    UpdateDialogHost(
+        state = updateState,
+        onDownload = updateViewModel::download,
+        onCancelDownload = updateViewModel::cancelDownload,
+        onInstall = updateViewModel::install,
+        onDismiss = updateViewModel::dismiss
+    )
+
+    AnimatedContent(
+        targetState = selectedExercise,
+        transitionSpec = {
+            if (targetState != null) {
+                // 进入详情：新页从右侧轻推入，旧页向左退让
+                (slideInHorizontally(tween(280)) { full -> full / 5 } + fadeIn(tween(220)))
+                    .togetherWith(
+                        slideOutHorizontally(tween(280)) { full -> -full / 8 } + fadeOut(tween(160))
+                    )
             } else {
-                Toast.makeText(context, "当前已是最新版本", Toast.LENGTH_SHORT).show()
+                (slideInHorizontally(tween(280)) { full -> -full / 8 } + fadeIn(tween(220)))
+                    .togetherWith(
+                        slideOutHorizontally(tween(280)) { full -> full / 5 } + fadeOut(tween(160))
+                    )
             }
+        },
+        label = "screen"
+    ) { target ->
+        if (target != null) {
+            ExerciseDetailScreen(
+                exercise = target,
+                isFavorite = target.id in uiState.favorites,
+                onToggleFavorite = { viewModel.toggleFavorite(target.id) },
+                onBack = { selectedId = null }
+            )
+        } else {
+            ExerciseListScreen(
+                state = uiState,
+                query = searchQuery,
+                listState = listState,
+                onQueryChange = viewModel::setSearchQuery,
+                onCategorySelected = viewModel::selectCategory,
+                onToggleFavoritesOnly = viewModel::toggleFavoritesOnly,
+                onClearFilters = viewModel::clearFilters,
+                onToggleFavorite = viewModel::toggleFavorite,
+                onExerciseClick = { exercise -> selectedId = exercise.id },
+                onRandomClick = { viewModel.randomExercise()?.let { selectedId = it.id } },
+                onTodayWorkoutClick = { viewModel.showTodayWorkout() },
+                onCheckUpdateClick = updateViewModel::checkForUpdate,
+                onRetry = viewModel::reload
+            )
         }
-        updateManager?.onDownloadProgress = { progress -> downloadProgress = progress }
-        updateManager?.onDownloadComplete = { file ->
-            showDownloadDialog = false
-            downloadedFile = file
-            showDownloadCompleteDialog = true
-        }
-        updateManager?.onError = { error ->
-            showCheckingDialog = false
-            showDownloadDialog = false
-            showUpdateDialog = false
-            Toast.makeText(context, error, Toast.LENGTH_LONG).show()
-        }
-    }
-
-    if (showCheckingDialog) CheckingUpdateDialog()
-
-    val currentUpdateInfo = updateInfo
-    if (showUpdateDialog && currentUpdateInfo != null) {
-        UpdateDialog(
-            versionName = currentUpdateInfo.versionName,
-            description = currentUpdateInfo.description,
-            apkSize = currentUpdateInfo.apkSize,
-            onConfirm = {
-                showUpdateDialog = false
-                showDownloadDialog = true
-                downloadProgress = 0f
-                updateManager?.startDownload(currentUpdateInfo)
-            },
-            onDismiss = {
-                showUpdateDialog = false
-                updateInfo = null
-            }
-        )
-    }
-
-    if (showDownloadDialog) {
-        DownloadProgressDialog(
-            progress = downloadProgress,
-            onDismiss = {
-                showDownloadDialog = false
-                updateManager?.cancelDownload()
-            }
-        )
-    }
-
-    val currentDownloadedFile = downloadedFile
-    if (showDownloadCompleteDialog && currentDownloadedFile != null) {
-        DownloadCompleteDialog(
-            onInstall = {
-                showDownloadCompleteDialog = false
-                updateManager?.installApk(currentDownloadedFile)
-            },
-            onDismiss = { showDownloadCompleteDialog = false }
-        )
     }
 
     val workout = todayWorkout
     if (workout != null) {
         TodayWorkoutSheet(
             workout = workout,
-            favorites = favorites,
-            onToggleFavorite = { viewModel.toggleFavorite(it) },
+            favorites = uiState.favorites,
+            onToggleFavorite = viewModel::toggleFavorite,
             onRegenerate = { viewModel.generateTodayWorkout() },
-            onExerciseClick = {
-                selectedExercise = it
+            onExerciseClick = { exercise ->
+                selectedId = exercise.id
                 viewModel.clearTodayWorkout()
             },
             onDismiss = { viewModel.clearTodayWorkout() }
         )
-    }
-
-    val detailExercise = selectedExercise
-    if (detailExercise != null) {
-        ExerciseDetailScreen(
-            exercise = detailExercise,
-            isFavorite = detailExercise.id in favorites,
-            onToggleFavorite = { viewModel.toggleFavorite(detailExercise.id) },
-            onBack = { selectedExercise = null }
-        )
-    } else {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("健身训练", fontWeight = FontWeight.Bold) },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        titleContentColor = MaterialTheme.colorScheme.onSurface
-                    ),
-                    actions = {
-                        IconButton(onClick = { viewModel.generateTodayWorkout() }) {
-                            Icon(Icons.Filled.FitnessCenter, contentDescription = "今日训练")
-                        }
-                        IconButton(onClick = {
-                            val random = viewModel.randomExercise()
-                            if (random != null) selectedExercise = random
-                        }) {
-                            Icon(Icons.Filled.Casino, contentDescription = "随机动作")
-                        }
-                        IconButton(onClick = {
-                            showCheckingDialog = true
-                            updateManager?.checkUpdate()
-                        }) {
-                            Icon(Icons.Filled.Refresh, contentDescription = "检查更新")
-                        }
-                    }
-                )
-            }
-        ) { paddingValues ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .imePadding()
-            ) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { viewModel.searchQuery.value = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    placeholder = { Text("搜索动作、部位或器材…") },
-                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = "搜索") },
-                    trailingIcon = {
-                        if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { viewModel.searchQuery.value = "" }) {
-                                Icon(Icons.Filled.Close, contentDescription = "清除搜索")
-                            }
-                        }
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(14.dp)
-                )
-
-                LazyRow(
-                    modifier = Modifier.padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp)
-                ) {
-                    item {
-                        FilterChip(
-                            selected = showFavoritesOnly,
-                            onClick = { viewModel.showFavoritesOnly.value = !showFavoritesOnly },
-                            label = { Text("收藏") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = if (showFavoritesOnly) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        )
-                    }
-                    items(ExerciseData.categories) { category ->
-                        FilterChip(
-                            selected = selectedCategory == category.name,
-                            onClick = { viewModel.selectedCategory.value = category.name },
-                            label = { Text("${category.icon} ${category.displayName}") }
-                        )
-                    }
-                }
-
-                Text(
-                    text = "共 ${filteredExercises.size} 个练习" + if (showFavoritesOnly) " · 仅收藏" else "",
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                when {
-                    isLoading -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator()
-                        }
-                    }
-                    filteredExercises.isEmpty() -> {
-                        EmptyState(favoritesOnly = showFavoritesOnly)
-                    }
-                    else -> {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(filteredExercises, key = { it.id }) { exercise ->
-                                ExerciseCard(
-                                    exercise = exercise,
-                                    isFavorite = exercise.id in favorites,
-                                    onToggleFavorite = { viewModel.toggleFavorite(exercise.id) },
-                                    onClick = { selectedExercise = exercise }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EmptyState(favoritesOnly: Boolean) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(
-                imageVector = if (favoritesOnly) Icons.Outlined.FavoriteBorder else Icons.Filled.SearchOff,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-            )
-            Text(
-                text = if (favoritesOnly) "还没有收藏的动作" else "未找到匹配的练习",
-                style = MaterialTheme.typography.titleMedium,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = if (favoritesOnly) "点击卡片上的 ♥ 即可收藏常用动作" else "试试其他关键词或切换分类",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-        }
     }
 }

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 13+ 主题图标用的单色图层。
+  彩色图标是位图无法直接派生单色层，这里用同一姿态的几何剪影重绘：
+  圆头 + 胶囊躯干 + 上举双臂，保证在系统着色后仍可辨认。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 头部 -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M54,31m-13,0a13,13 0 1,0 26,0a13,13 0 1,0 -26,0" />
+
+    <!-- 躯干 -->
+    <path
+        android:pathData="M54,54L54,70"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="20"
+        android:strokeLineCap="round" />
+
+    <!-- 左臂上举 -->
+    <path
+        android:pathData="M46,56L35,34"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="8"
+        android:strokeLineCap="round" />
+
+    <!-- 右臂上举 -->
+    <path
+        android:pathData="M62,56L73,34"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="8"
+        android:strokeLineCap="round" />
+</vector>

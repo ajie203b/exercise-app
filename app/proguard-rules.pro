@@ -5,25 +5,11 @@
 # For more details, see
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
-
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
-
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renameSourcefileattribute SourceFile
-
-# Gson 反射解析的数据模型：保留类与字段名（含 @SerializedName）
+# Gson 通过反射解析的传输对象：必须保留类名与字段名。
+# 领域模型 Exercise 由 DTO 转换而来，不再参与反射解析，但保留成本极低且能防止
+# 后续有人直接在 Gson 上复用它时踩坑。
+-keep class com.exercise.app.ExerciseDto { *; }
 -keep class com.exercise.app.Exercise { *; }
--keep class com.exercise.app.ExerciseCategory { *; }
--keep class com.exercise.app.UpdateInfo { *; }
 -keepclassmembers,allowobfuscation class * {
     @com.google.gson.annotations.SerializedName <fields>;
 }

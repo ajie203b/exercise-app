@@ -45,6 +45,9 @@
 # 构建 debug APK
 ./gradlew assembleDebug
 
+# 构建已签名的 release APK（签名配置见 BUILD_INSTRUCTIONS.md）
+./gradlew assembleRelease
+
 # 安装到设备
 ./gradlew installDebug
 ```
@@ -56,18 +59,30 @@ ExerciseApp/
 ├── app/
 │   ├── src/main/
 │   │   ├── java/com/exercise/app/
-│   │   │   ├── MainActivity.kt          # 主 Activity
-│   │   │   ├── ExerciseApp.kt           # 主 UI 组件
+│   │   │   ├── ExerciseApplication.kt   # Application：统一初始化图片加载器
+│   │   │   ├── MainActivity.kt          # 主 Activity（仅承载 Compose）
+│   │   │   ├── ExerciseApp.kt           # 外层壳：导航 / 今日训练 / 更新对话框
+│   │   │   ├── ExerciseListScreen.kt    # 列表页（无状态）
 │   │   │   ├── ExerciseCard.kt          # 练习卡片组件
 │   │   │   ├── ExerciseDetailScreen.kt  # 练习详情页面
-│   │   │   ├── Exercise.kt              # 数据模型
-│   │   │   └── DataLoader.kt            # 数据加载器
+│   │   │   ├── TodayWorkout.kt          # 今日训练弹层
+│   │   │   ├── TrainingAid.kt           # 训练辅助（倒计时 / 秒表 / 计数）
+│   │   │   ├── Exercise.kt              # 领域模型与分类元数据
+│   │   │   ├── ExerciseViewModel.kt     # 列表状态与筛选
+│   │   │   ├── DataLoader.kt            # assets 数据解析（DTO 校验 + Result）
+│   │   │   ├── CoilConfig.kt            # 图片加载器配置
+│   │   │   ├── UpdateManager.kt         # 更新状态机（检查 / 下载 / 校验 / 安装）
+│   │   │   ├── UpdateViewModel.kt       # 更新流程的 ViewModel 包装
+│   │   │   ├── UpdateDialog.kt          # 更新相关对话框
+│   │   │   ├── UpdateConfig.kt          # 版本清单与下载地址
+│   │   │   └── ui/theme/                # 主题与排版
 │   │   ├── assets/
 │   │   │   ├── exercises.json           # 筛选后的练习数据
 │   │   │   └── images/                  # GIF 动画文件
 │   │   └── res/
-│   │       ├── values/                  # 字符串和主题资源
-│   │       └── xml/                     # 配置文件
+│   │       ├── values/                  # 字符串、颜色和主题资源
+│   │       ├── values-night/            # 深色模式主题
+│   │       └── xml/                     # FileProvider 等配置
 │   └── build.gradle.kts                 # App 构建配置
 ├── build.gradle.kts                     # 项目构建配置
 ├── settings.gradle.kts                  # 项目设置

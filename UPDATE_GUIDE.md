@@ -70,6 +70,17 @@ const val REPOSITORY_NAME = "exercise-app"  // ← 改成你的仓库名
 | `versionName` | 版本名称，显示给用户 | `"1.0"`, `"1.1"` |
 | `description` | 更新内容描述 | `"修复了bug"` |
 | `apkSize` | APK文件大小（可选） | `"5.2MB"` |
+| `sha256` | APK 的 SHA-256（可选，64 位十六进制） | `"9f86d0..."` |
+
+> 填写 `sha256` 后，客户端下载完成会校验安装包完整性，不一致则删除并提示重新下载，
+> 可避免网络中断或 CDN 缓存导致的半包安装失败。生成方式：
+>
+> ```bash
+> # Windows PowerShell
+> Get-FileHash app-release.apk -Algorithm SHA256
+> # macOS / Linux
+> shasum -a 256 app-release.apk
+> ```
 
 ---
 

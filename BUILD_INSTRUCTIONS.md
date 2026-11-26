@@ -55,7 +55,7 @@
 3. **打开项目**
    - 启动 Android Studio
    - 选择 `File` → `Open`
-   - 导航到 `D:\AAA-resource\app\exerises\ExerciseApp`
+   - 导航到 `D:\ABBstudy\app\exerises\ExerciseApp`
    - 点击 OK
 
 4. **等待同步**
@@ -80,6 +80,43 @@
 2. 发送给朋友
 3. 请他们按照方法二构建
 4. 让他们把生成的 APK 文件发回给您
+
+---
+
+## 发布签名（release）
+
+签名已交给 Gradle 处理，无需再手工 `apksigner`。
+
+**1. 准备签名文件**
+
+- 密钥：`keystore/release.jks`（**不要提交到仓库**，`.gitignore` 已排除 `*.jks`）
+- 配置：工程根目录 `keystore.properties`
+
+```properties
+storeFile=keystore/release.jks
+storePassword=你的密钥库口令
+keyAlias=exercise
+keyPassword=你的密钥口令
+```
+
+> 必须沿用既有的 `release.jks`。换用新密钥会导致已安装用户无法覆盖升级（签名不一致）。
+
+**2. 构建**
+
+```bash
+./gradlew assembleRelease
+```
+
+产物：`app/build/outputs/apk/release/app-release.apk`（已签名，v2 方案）。
+
+**3. 校验**
+
+```bash
+# build-tools 目录下
+apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
+```
+
+> `keystore.properties` 缺失时（例如 CI 环境），release 会自动退回 unsigned 构建，不会中断流水线。
 
 ---
 

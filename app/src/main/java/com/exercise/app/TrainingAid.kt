@@ -1,84 +1,183 @@
 package com.exercise.app
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import android.os.SystemClock
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.exercise.app.ui.components.AppFilterChip
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import java.util.Locale
 
-private enum class TimerMode { Countdown, Stopwatch }
+private const val TICK_MS = 200L
+private val DURATION_PRESETS = listOf(30, 60, 90, 120)
 
+/**
+ * 计时相关文本统一按 UTC 数字格式化，避免阿拉伯语等区域把数字显示成本地字符。
+ */
 private fun formatTime(totalSeconds: Int): String {
-    val m = totalSeconds / 60
-    val s = totalSeconds % 60
-    return "%02d:%02d".format(m, s)
+    val safe = totalSeconds.coerceAtLeast(0)
+    return String.format(Locale.ROOT, "%02d:%02d", safe / 60, safe % 60)
 }
 
+/**
+ * 训练辅助：倒计时 / 秒表 + 次数、组数计数。
+ *
+ * 计时使用 [SystemClock.elapsedRealtime] 作为时基，而不是累加 `delay(1000)`：
+ * 后者在后台调度或卡顿时会持续漂移，跑几分钟就明显偏差。
+ * 状态全部走 [rememberSaveable]，旋转屏幕或滑出屏幕再回来都不会归零。
+ */
 @Composable
 fun TrainingAidSection(modifier: Modifier = Modifier) {
-    var mode by remember { mutableStateOf(TimerMode.Countdown) }
-    var durationSec by remember { mutableStateOf(60) }
-    var remainingSec by remember { mutableStateOf(60) }
-    var elapsedSec by remember { mutableStateOf(0) }
-    var running by remember { mutableStateOf(false) }
-    var reps by remember { mutableStateOf(0) }
-    var sets by remember { mutableStateOf(0) }
+    val haptics = LocalHapticFeedback.current
 
-    LaunchedEffect(running, mode) {
+    var countdown by rememberSaveable { mutableStateOf(true) }
+    var durationSec by rememberSaveable { mutableStateOf(60) }
+    var running by rememberSaveable { mutableStateOf(false) }
+    var countdownElapsedMs by rememberSaveable { mutableStateOf(0L) }
+    var stopwatchElapsedMs by rememberSaveable { mutableStateOf(0L) }
+    var startedAt by rememberSaveable { mutableStateOf(0L) }
+    var reps by rememberSaveable { mutableStateOf(0) }
+    var sets by rememberSaveable { mutableStateOf(0) }
+
+    // 仅用于驱动重绘的时基快照，不参与持久化
+    var nowMs by remember { mutableStateOf(SystemClock.elapsedRealtime()) }
+
+    val limitMs = durationSec * 1000L
+    val activeElapsedMs = if (countdown) countdownElapsedMs else stopwatchElapsedMs
+    val liveElapsedMs = if (running) {
+        activeElapsedMs + (nowMs - startedAt).coerceAtLeast(0L)
+    } else {
+        activeElapsedMs
+    }
+    val finished = countdown && limitMs > 0 && liveElapsedMs >= limitMs
+    val displaySeconds = if (countdown) {
+        ((limitMs - liveElapsedMs).coerceAtLeast(0L) / 1000L).toInt()
+    } else {
+        (liveElapsedMs / 1000L).toInt()
+    }
+
+    fun stopRunning() {
+        if (!running) return
+        val delta = (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(0L)
+        if (countdown) {
+            countdownElapsedMs = (countdownElapsedMs + delta).coerceAtMost(limitMs)
+        } else {
+            stopwatchElapsedMs += delta
+        }
+        running = false
+    }
+
+    LaunchedEffect(running, countdown, durationSec) {
         if (!running) return@LaunchedEffect
-        while (running) {
-            delay(1000)
-            if (mode == TimerMode.Countdown) {
-                if (remainingSec > 0) remainingSec--
-                if (remainingSec == 0) running = false
-            } else {
-                elapsedSec++
+        while (isActive) {
+            val now = SystemClock.elapsedRealtime()
+            nowMs = now
+            if (countdown) {
+                val elapsed = countdownElapsedMs + (now - startedAt).coerceAtLeast(0L)
+                if (elapsed >= limitMs) {
+                    countdownElapsedMs = limitMs
+                    running = false
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    break
+                }
             }
+            delay(TICK_MS)
         }
     }
 
-    val finished = mode == TimerMode.Countdown && remainingSec == 0 && durationSec > 0
-
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)
+        )
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("训练辅助", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                text = "训练辅助",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = mode == TimerMode.Countdown,
-                    onClick = { mode = TimerMode.Countdown; running = false },
-                    label = { Text("倒计时") }
+                AppFilterChip(
+                    selected = countdown,
+                    onClick = {
+                        stopRunning()
+                        countdown = true
+                    },
+                    label = "倒计时"
                 )
-                FilterChip(
-                    selected = mode == TimerMode.Stopwatch,
-                    onClick = { mode = TimerMode.Stopwatch; running = false },
-                    label = { Text("秒表") }
+                AppFilterChip(
+                    selected = !countdown,
+                    onClick = {
+                        stopRunning()
+                        countdown = false
+                    },
+                    label = "秒表"
                 )
             }
 
             Text(
-                text = if (mode == TimerMode.Countdown) formatTime(remainingSec) else formatTime(elapsedSec),
-                fontSize = 44.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (finished) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                text = formatTime(displaySeconds),
+                // tnum：等宽数字，秒数跳动时整体宽度不会左右抖
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontSize = 44.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFeatureSettings = "tnum",
+                    letterSpacing = 1.sp
+                ),
+                color = if (finished) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
 
@@ -91,17 +190,18 @@ fun TrainingAidSection(modifier: Modifier = Modifier) {
                 )
             }
 
-            if (mode == TimerMode.Countdown) {
+            if (countdown) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(30, 60, 90, 120).forEach { sec ->
-                        FilterChip(
+                    DURATION_PRESETS.forEach { sec ->
+                        AppFilterChip(
                             selected = durationSec == sec,
                             onClick = {
                                 durationSec = sec
-                                remainingSec = sec
+                                countdownElapsedMs = 0L
                                 running = false
+                                nowMs = SystemClock.elapsedRealtime()
                             },
-                            label = { Text("${sec}s") }
+                            label = "${sec}s"
                         )
                     }
                 }
@@ -113,8 +213,17 @@ fun TrainingAidSection(modifier: Modifier = Modifier) {
             ) {
                 Button(
                     onClick = {
-                        if (mode == TimerMode.Countdown && remainingSec == 0) remainingSec = durationSec
-                        running = !running
+                        if (running) {
+                            stopRunning()
+                        } else {
+                            if (countdown && countdownElapsedMs >= limitMs) {
+                                countdownElapsedMs = 0L
+                            }
+                            val now = SystemClock.elapsedRealtime()
+                            startedAt = now
+                            nowMs = now
+                            running = true
+                        }
                     },
                     modifier = Modifier.weight(1f)
                 ) {
@@ -128,8 +237,10 @@ fun TrainingAidSection(modifier: Modifier = Modifier) {
                 OutlinedButton(
                     onClick = {
                         running = false
-                        remainingSec = durationSec
-                        elapsedSec = 0
+                        countdownElapsedMs = 0L
+                        stopwatchElapsedMs = 0L
+                        startedAt = 0L
+                        nowMs = SystemClock.elapsedRealtime()
                     },
                     modifier = Modifier.weight(1f)
                 ) {
@@ -141,14 +252,29 @@ fun TrainingAidSection(modifier: Modifier = Modifier) {
 
             HorizontalDivider()
 
-            StepperRow(label = "次数", value = reps, onDecrement = { if (reps > 0) reps-- }, onIncrement = { reps++ })
-            StepperRow(label = "组数", value = sets, onDecrement = { if (sets > 0) sets-- }, onIncrement = { sets++ })
+            StepperRow(
+                label = "次数",
+                value = reps,
+                onDecrement = { if (reps > 0) reps-- },
+                onIncrement = { reps++ }
+            )
+            StepperRow(
+                label = "组数",
+                value = sets,
+                onDecrement = { if (sets > 0) sets-- },
+                onIncrement = { sets++ }
+            )
         }
     }
 }
 
 @Composable
-private fun StepperRow(label: String, value: Int, onDecrement: () -> Unit, onIncrement: () -> Unit) {
+private fun StepperRow(
+    label: String,
+    value: Int,
+    onDecrement: () -> Unit,
+    onIncrement: () -> Unit
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -164,7 +290,7 @@ private fun StepperRow(label: String, value: Int, onDecrement: () -> Unit, onInc
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.widthIn(min = 56.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                textAlign = TextAlign.Center
             )
             FilledIconButton(onClick = onIncrement, modifier = Modifier.size(36.dp)) {
                 Icon(Icons.Filled.Add, contentDescription = "增加$label")
