@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Environment
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import androidx.core.content.FileProvider
@@ -36,6 +37,12 @@ private const val TAG = "UpdateManager"
 private const val TIMEOUT_MS = 10_000
 private const val MAX_MANIFEST_CHARS = 64 * 1024
 private const val POLL_INTERVAL_MS = 400L
+
+/** 连续多久没有新增字节就判定下载停滞 */
+private const val STALL_TIMEOUT_MS = 60_000L
+
+/** 停滞多久后给一次"仍在等待"的提示，避免用户以为界面卡死 */
+private const val STALL_HINT_DELAY_MS = 8_000L
 private const val APK_MIME = "application/vnd.android.package-archive"
 private const val APK_PREFIX = "exercise_app_v"
 private const val APK_SUFFIX = ".apk"
@@ -262,6 +269,11 @@ class UpdateManager(
     private fun observeDownload(id: Long, info: UpdateInfo, target: File) {
         downloadJob?.cancel()
         downloadJob = scope.launch {
+            // 下载可能停在 PENDING（等待「已验证网络」）或 PAUSED 而长时间不动，
+            // 因此以「字节数是否增长」判定停滞，超过阈值就明确报错，避免界面永远停在 0%。
+            var lastBytes = -1L
+            var lastActivityAt = SystemClock.elapsedRealtime()
+            var stallHintShown = false
             try {
                 while (isActive) {
                     val snapshot = queryDownload(id)
@@ -279,6 +291,23 @@ class UpdateManager(
                             return@launch
                         }
                         else -> {
+                            val now = SystemClock.elapsedRealtime()
+                            if (snapshot.downloadedBytes != lastBytes) {
+                                lastBytes = snapshot.downloadedBytes
+                                lastActivityAt = now
+                                stallHintShown = false
+                            }
+                            val idleMs = now - lastActivityAt
+                            when {
+                                idleMs > STALL_TIMEOUT_MS -> {
+                                    failWith("下载长时间无进展，请检查网络后重试")
+                                    return@launch
+                                }
+                                idleMs > STALL_HINT_DELAY_MS && !stallHintShown -> {
+                                    stallHintShown = true
+                                    emit("网络较慢或不可用，仍在等待…")
+                                }
+                            }
                             if (snapshot.totalBytes > 0) {
                                 val progress =
                                     (snapshot.downloadedBytes.toFloat() / snapshot.totalBytes)
